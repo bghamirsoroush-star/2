@@ -1,7 +1,8 @@
-# telegram_bot.py
+# telegram_bot.py (اصلاح شده)
 import asyncio
 import logging
 import os
+import threading
 from typing import Dict, List, Optional
 
 from telegram import (
@@ -276,8 +277,13 @@ class TelegramBot:
                 parse_mode=ParseMode.MARKDOWN
             )
             
-            # Run the bombing in background
-            asyncio.create_task(self.run_bombing(update, phone, delay, count))
+            # Run the bombing in a separate thread to avoid blocking
+            thread = threading.Thread(
+                target=self.run_bombing_sync,
+                args=(update, phone, delay, count)
+            )
+            thread.start()
+            
             return PHONE
         elif query.data == "confirm_no":
             keyboard = [
@@ -295,11 +301,17 @@ class TelegramBot:
         elif query.data == "confirm_settings":
             return self.settings(update, context)
     
-    async def run_bombing(self, update: Update, phone: str, delay: float, count: int):
-        """Run the SMS bombing process"""
+    def run_bombing_sync(self, update: Update, phone: str, delay: float, count: int):
+        """Run the SMS bombing process in a synchronous way"""
         try:
-            await self.bomber.bomb(phone, delay, count)
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
+            # Run the async bombing function
+            loop.run_until_complete(self.bomber.bomb(phone, delay, count))
+            
+            # Send completion message
             keyboard = [
                 [KeyboardButton("📱 Send SMS"), KeyboardButton("ℹ️ About")],
                 [KeyboardButton("⚙️ Settings"), KeyboardButton("🔙 Back")]
@@ -318,6 +330,9 @@ class TelegramBot:
                 f"❌ An error occurred: {str(e)}\n\n"
                 "Please try again later."
             )
+        finally:
+            # Close the loop
+            loop.close()
     
     def handle_message(self, update: Update, context: CallbackContext) -> int:
         """Handle general messages"""
