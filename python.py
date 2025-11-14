@@ -1,4 +1,4 @@
-# main.py
+# main.py (اصلاح شده)
 import asyncio
 import base64
 import re
